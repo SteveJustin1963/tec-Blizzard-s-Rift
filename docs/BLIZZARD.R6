@@ -1,0 +1,1271 @@
+
+
+ENDCHR equ 255
+AT     equ 22
+
+
+
+       org 24000
+
+
+; Save RAM bank to tape.
+
+       ld ix,49152
+       ld de,termin - 49152
+       ld a,255
+       call 1218
+       ret
+
+
+       ld hl,23693
+       ld (hl),71
+       call 3503
+       xor a
+       call 8859
+
+       jp 49152
+
+
+
+       org 32741
+
+enough ret
+       defb 0,0
+
+win    ret
+       defb 0,0
+
+stake  ret
+       defb 0,0
+
+hold   ret
+       defb 0,0
+trans  ret
+       defb 0,0
+upsc   ret
+       defb 0,0
+hitshp ret
+       defb 0,0
+
+ftest  and a
+       ret
+       defb 0
+
+joykey jp joyk2
+
+; User defined keys.
+
+keys   defb 28,27,35,16,1
+
+
+; Key test routine.
+
+ktest  ld c,a              ; key to test in c.
+       and 7               ; mask bits d0-d2 for row.
+       inc a               ; in range 1-8.
+       ld b,a              ; place in b.
+       srl c               ; divide c by 8
+       srl c               ; to find position within row.
+       srl c
+       ld a,5              ; only 5 keys per row.
+       sub c               ; subtract position.
+       ld c,a              ; put in c.
+       ld a,254            ; high byte of port to read.
+ktest0 rrca                ; rotate into position.
+       djnz ktest0         ; repeat until we've found relevant row.
+       in a,(254)          ; read port (a=high, 254=low).
+ktest1 rra                 ; rotate bit out of result.
+       dec c               ; loop counter.
+       jp nz,ktest1        ; repeat until bit for position in carry.
+       ret
+
+; Joystick and keyboard reading routines.
+
+joyk2  ld a,(contrl)       ; control flag.
+       and a               ; is it the keyboard?
+       jr nz,joyjoy        ; no, it's joystick.
+
+; Keyboard controls.
+
+       ld e,0              ; control.
+       ld a,(keys+3)       ; fire key.
+       call ktest          ; being pressed?
+       ccf                 ; complement the carry.
+       rl e                ; rotate into e register.
+       ld a,(keys)         ; up key.
+       call ktest          ; being pressed?
+       ccf                 ; complement the carry.
+       rl e                ; rotate into e register.
+       rl e                ; rotate into e register.
+       ld a,(keys+1)       ; left key.
+       call ktest          ; being pressed?
+       ccf                 ; complement the carry.
+       rl e                ; rotate into bit d0 of e register.
+       ld a,(keys+2)       ; left key.
+       call ktest          ; being pressed?
+       ccf                 ; complement the carry.
+       rl e                ; destined for bit d1 of e register.
+       ld a,e              ; place result in accumulator.
+       ld (joyval),a       ; put that into joyval.
+       ret
+
+joyjoy dec a               ; is it Kempston?
+       jr z,joykem         ; yes.
+
+; Sinclair joystick controls.
+
+joysin ld bc,61438         ; port for Sinclair 2.
+       in a,(c)            ; read joystick.
+       ld d,a              ; clear values.
+       xor a               ; clear accumulator.
+       ld e,16             ; Kempston fire bit value.
+       bit 0,d             ; fire bit pressed?
+       call z,joysi0       ; add bit.
+       ld e,1              ; Kempston bit value.
+       bit 3,d             ; fire bit pressed?
+       call z,joysi0       ; add bit.
+       ld e,2              ; Kempston bit value.
+       bit 4,d             ; fire bit pressed?
+       call z,joysi0       ; add bit.
+       ld e,8              ; Kempston bit value.
+       bit 1,d             ; fire bit pressed?
+       call z,joysi0       ; add bit.
+       ld e,4              ; Kempston bit value.
+       bit 2,d             ; fire bit pressed?
+       call z,joysi0       ; add bit.
+       ld (joyval),a       ; remember value.
+       ret
+
+joysi0 add a,e             ; add bit value.
+       ret
+
+
+; Kempston joystick controls.
+
+joykem ld bc,31            ; port for Kempston interface.
+       in a,(c)            ; read it.
+       ld (joyval),a       ; remember value.
+       ret
+
+contrl defb 0              ; control method.
+joyval defb 0              ; value returned.
+
+
+
+
+
+       org 49152
+
+; Randomise seed.
+
+       ld a,(23672)        ; clock value.
+       ld (seed),a         ; set seed byte.
+
+
+; Initial screen set up.
+
+       ld hl,winp          ; win plan.
+       call dfont          ; display text.
+
+       defb 33,1,9         ; coordinates.
+       ld (dispx),hl       ; set display coords.
+       defb 17,12,22       ; height and width.
+       ld c,87             ; colour.
+       call fbox           ; fill box.
+       defb 33,13,9        ; coordinates.
+       ld (dispx),hl       ; set display coords.
+       defb 17,2,22        ; height and width.
+       ld c,23             ; colour.
+       call fbox           ; fill box.
+       defb 33,2,18        ; coordinates.
+       ld (dispx),hl       ; set display coords.
+       defb 17,9,12        ; height and width.
+       ld c,48             ; yellow winplan.
+       call fbox           ; fill box.
+
+       defb 33,1,9         ; coordinates.
+       ld (dispx),hl       ; set image position.
+       defb 33,14,8        ; height/width.
+       ld (height),hl      ; set parameters.
+       ld de,aldgfx        ; alien dealer.
+       call image          ; show dealer.
+
+       defb 33,15,9        ; coordinates.
+       ld (dispx),hl       ; set display coords.
+       defb 17,8,22        ; height and width.
+       ld c,9              ; blue table.
+       call fbox           ; fill box.
+
+start  call enough         ; do we have enough?
+       ret c               ; no, exit.
+       ld hl,mtxt          ; menu text.
+       call dfont          ; display text.
+smenu0 call joykey         ; input.
+       and 31              ; anything pressed?
+       jr nz,smenu0        ; yes, debounce it.
+       call dbar           ; show bar.
+smenu1 call joykey         ; control.
+       rra                 ; check direction.
+       jr c,mbard          ; move bar.
+       rra                 ; check direction.
+       jr c,mbaru          ; move bar.
+       and 4               ; fire pressed?
+       jr z,smenu1         ; no, loop.
+       call dbar           ; show bar.
+       ld a,(optnum)       ; option number.
+       and a               ; zero means play.
+       ret nz              ; non-zero means quit.
+       jr play             ; play game.
+
+mbaru  call dbar           ; delete bar.
+       xor a               ; zero.
+       ld (optnum),a       ; option number.
+       jr smenu0           ; debounce.
+mbard  call dbar           ; delete bar.
+       ld a,32             ; bar position.
+       ld (optnum),a       ; option number.
+       jr smenu0           ; debounce.
+
+
+play   ld hl,dtxt          ; menu deletion text.
+       call dfont          ; display text.
+       call stake          ; deduct stake.
+       defb 33,15,9        ; coordinates.
+       ld (dispx),hl       ; set display coords.
+       defb 17,8,22        ; height and width.
+       ld c,9              ; blue table.
+       call fbox           ; fill box.
+play0  call deal           ; shuffle pack.
+       call ccard          ; check cards.
+       and a               ; deal an award?
+       jr nz,play0         ; yes - shuffle again.
+
+       ld hl,cards         ; cards.
+       ld (cptr),hl        ; set pointer.
+       call dhand          ; deal hand.
+       call scard          ; change cards.
+       call repl           ; replace changed cards.
+       call ccard          ; check cards.
+       and a               ; zero means no award.
+       jp z,start
+       push af             ; store award.
+       push af             ; store award.
+       call awat           ; award attributes.
+       ld b,100            ; delay.
+       call delay          ; wait a second or two.
+       pop af              ; restore award.
+       call awat           ; stop flashing.
+       pop af              ; restore award.
+       ld e,a              ; low byte of displacement.
+       ld d,0              ; no high byte.
+       ld hl,prizes        ; award card.
+       add hl,de           ; point to award.
+       ld b,(hl)           ; amount to give.
+pay    push bc             ; store counter.
+       call win            ; pay sum of money.
+       pop bc              ; retrieve counter.
+       djnz pay            ; repeat for rest of total.
+       jp start
+
+
+prizes defb 0,50,30,20,10,5,3,2
+
+; Award attributes.
+
+awat   rrca                ; multiply award by 32.
+       rrca
+       rrca
+       ld e,a              ; displacement in e.
+       ld d,0              ; no high byte.
+       ld hl,22610         ; attributes start.
+       add hl,de           ; point to start.
+       ld b,12             ; cells to flash.
+awat0  ld a,(hl)           ; attribute cell.
+       xor 128             ; flash on/off
+       ld (hl),a           ; new value.
+       inc hl              ; next cell.
+       djnz awat0          ; rest of line.
+       ret
+
+
+optnum defb 0              ; option number selected.
+
+dbar   ld a,(optnum)       ; option selected.
+       ld e,a              ; displacement in e.
+       ld d,0              ; no high byte.
+       ld hl,22972         ; attribute cell.
+       add hl,de           ; point to attributes.
+       ld a,81             ; both attributes added together.
+       sub (hl)            ; toggle attribute value.
+       ld (hl),a           ; write attribute.
+       inc l               ; second cell.
+       ld (hl),a           ; write that one too.
+       ret
+
+
+
+
+; Decide what player has.
+
+ccard  ld hl,nums          ; cad numbers.
+       ld de,nums+1        ; next byte.
+       ld bc,16            ; suits + numbers - 1.
+       ld (hl),b           ; clear first byte.
+       ldir                ; clear remainder.
+       ld ix,cards         ; cards in hand.
+       ld b,5              ; number to check.
+ccard0 ld a,(ix)           ; get card.
+       and 48              ; suit bits.
+       rrca                ; divide by 16.
+       rrca
+       rrca
+       rrca
+       ld d,0              ; no high byte.
+       ld e,a              ; low byte of displacement.
+       ld hl,suits         ; suits.
+       add hl,de           ; point to suit.
+       inc (hl)            ; increment tally for suit.
+       ld a,(ix)           ; get card.
+       and 15              ; value bits.
+       ld e,a              ; low byte of displacement.
+       ld hl,nums          ; card values.
+       add hl,de           ; point to value.
+       inc (hl)            ; increment tally for value.
+       inc ix              ; next card.
+       djnz ccard0         ; repeat for rest of hand.
+       call award          ; award to pay?
+       out (254),a
+       ret
+
+
+
+award  call sfchk          ; straight flush?
+       jr nz,award1        ; yes.
+       call oak4           ; 4 of a kind?
+       jr nz,award2        ; yes.
+       call fullh          ; full house?
+       jr nz,award3        ; yes.
+       call fchk           ; flush?
+       jr nz,award4        ; yes.
+       call schk           ; straight?
+       jr nz,award5        ; yes.
+       call oak3           ; 3 of a kind?
+       jr nz,award6        ; yes.
+       call pair2          ; 2 pairs?
+       jr nz,award7        ; yes.
+       ld b,50
+       call delay
+       xor a               ; no award.
+       ret
+award1 ld a,1              ; set award.
+       ret
+award2 ld a,2              ; set award.
+       ret
+award3 ld a,3              ; set award.
+       ret
+award4 ld a,4              ; set award.
+       ret
+award5 ld a,5              ; set award.
+       ret
+award6 ld a,6              ; set award.
+       ret
+award7 ld a,7              ; set award.
+       ret
+
+
+fullh  call oak3           ; look for 3 of a kind.
+       ret z               ; not found.
+       call oak2           ; look for pair too.
+       ret
+oak4   ld c,4              ; 4 of a kind sought.
+       jr oak              ; check.
+oak3   ld c,3              ; 3 of a kind sought.
+       jr oak              ; perform check.
+pair2  call oak2           ; look for pair.
+       ret z               ; no pair found.
+       dec b               ; one less iteration.
+       ret z               ; on last card so can't find another pair.
+       jr oak0             ; look for another pair.
+oak2   ld c,2              ; pair sought.
+       jr oak              ; perform pair check.
+
+
+; Number-of-a-kind check.
+
+oak    ld b,13             ; numbers to check.
+       ld hl,nums          ; card numbers.
+oak0   ld a,(hl)           ; number of this value.
+       inc hl              ; next card.
+       cp c                ; does it match c register?
+       jr z,oak1           ; yes, found number of a kind.
+       djnz oak0           ; repeat.
+       xor a               ; clear zero flag.
+       ret
+oak1   and a               ; ensure zero flag not set.
+       ret
+
+
+; Straight flush check.
+
+sfchk  call fchk           ; check for flush.
+       ret z               ; not a flush.
+       call schk           ; check for straight.
+       ret
+
+; Straight check.
+
+schk   ld a,(nums+12)      ; aces.
+       cp 1                ; just one?
+       jr nz,schk3         ; no, not an ace-2-3-4-5 straight.
+       ld a,(nums)         ; two.
+       cp 1                ; just one?
+       jr nz,schk3         ; no, not an ace-2-3-4-5 straight.
+       ld a,(nums+1)       ; three.
+       cp 1                ; just one?
+       jr nz,schk3         ; no, not an ace-2-3-4-5 straight.
+       ld a,(nums+2)       ; four.
+       cp 1                ; just one?
+       jr nz,schk3         ; no, not an ace-2-3-4-5 straight.
+       ld a,(nums+3)       ; five.
+       cp 1                ; just one?
+       jr nz,schk3         ; no, not an ace-2-3-4-5 straight.
+       and a               ; non-zero result to indicate straight.
+       ret
+
+schk3  ld hl,nums          ; card values.
+       ld b,9              ; maximum to check.
+schk0  ld a,(hl)           ; card present?
+       and a               ; zero means no.
+       jr nz,schk1         ; yes - found first number.
+       inc hl              ; next card.
+       djnz schk0          ; repeat.
+schkn  xor a               ; not found straight.
+       ret
+schk1  ld b,4              ; remainder to check.
+schk2  inc hl              ; next number.
+       ld a,(hl)           ; get contents.
+       cp 1                ; just one?
+       jr nz,schkn         ; no, it's not a straight.
+       djnz schk2          ; repeat.
+       and a               ; non-zero result to indicate straight.
+       ret
+
+
+
+; Flush check.
+
+fchk   ld hl,suits         ; suits.
+       ld bc,4*256         ; reset c for flush and b=suits to check.
+fchk0  ld a,(hl)           ; get number of this suit.
+       cp 5                ; flush?
+       call z,sflush       ; yes, set flush.
+       inc hl              ; next card.
+       djnz fchk0          ; repeat for rest of flush check.
+       ld a,c              ; status in a.
+       and a               ; non-zero means flush.
+       ret
+
+
+
+sflush inc c               ; set flush flag.
+       ret
+
+; Each number type.
+
+nums   defb 0,0,0,0,0,0,0,0,0,0,0,0,0
+suits  defb 0,0,0,0
+
+
+; Select cards.
+
+scard  ld a,0              ; default pointer position.
+       ld (ppos),a         ; pointer position.
+       ld hl,cards         ; player's cards.
+       ld (cptr),hl        ; set pointer.
+scard1 call joykey         ; input.
+       and 31              ; anything pressed?
+       jr nz,scard1        ; yes, debounce it.
+scard0 call sptr           ; show pointer.
+       call joykey         ; input.
+       rra                 ; shift bit into carry.
+       jr c,mcr            ; move cursor.
+       rra                 ; shift bit into carry.
+       jr c,mcl            ; move cursor.
+       rra                 ; shift bit into carry.
+       rra                 ; shift bit into carry.
+       jr c,flipc          ; flip card.
+       rra                 ; shift bit into carry.
+       jp c,dptr           ; yes, job done.
+       jr scard0
+
+
+
+flipc  ld hl,(cptr)        ; card pointer.
+       ld a,(hl)           ; present card.
+       xor 128             ; flip it.
+       ld (hl),a           ; new value.
+       call dcard          ; display card.
+       call sndn           ; sound effect.
+       jr scard1
+
+mcl    ld hl,ppos          ; cursor pos.
+       ld a,(hl)           ; check its value.
+       and a               ; is it at leftmost card?
+       jr z,scard1         ; yes, don't move.
+       call dptr           ; delete pointer.
+       ld hl,ppos          ; cursor pos.
+       dec (hl)            ; move left.
+       ld hl,(cptr)        ; card pointer.
+       dec hl              ; look left one card.
+       ld (cptr),hl        ; new pointer.
+       jr scard1
+mcr    ld hl,ppos          ; cursor pos.
+       ld a,(hl)           ; check its value.
+       cp 4                ; is it at rightmost card?
+       jr z,scard1         ; yes, don't move.
+       call dptr           ; delete pointer.
+       ld hl,ppos          ; cursor pos.
+       inc (hl)            ; move right.
+       ld hl,(cptr)        ; card pointer.
+       inc hl              ; look right one card.
+       ld (cptr),hl        ; new pointer.
+       jr scard1
+
+; Show pointer / delete pointer.
+
+sptr   call cpos           ; position of pointer.
+       ld a,(dispx)        ; x coord.
+       add a,4             ; adjust it.
+       ld (dispx),a        ; set new position.
+       defb 33,1,3         ; height/width.
+       ld (height),hl      ; set height and width.
+       ld de,arrow         ; image data.
+       jp image            ; show image.
+
+dptr   call cpos           ; position of pointer.
+       ld a,(dispx)        ; x coord.
+       add a,4             ; adjust it.
+       ld (dispx),a        ; set new position.
+       defb 33,1,3         ; height/width.
+       ld (height),hl      ; set height and width.
+       ld de,space         ; image data.
+       jp image            ; show image.
+
+
+
+ppos   defb 0              ; pointer position.
+
+; Replace cards.
+
+repl   ld b,5              ; cards to display.
+       ld hl,cards+5       ; cards.
+       ld (cptr2),hl       ; rest of deck.
+       ld hl,cards         ; player's hand.
+       ld (cptr),hl        ; set pointer.
+repl0  push bc             ; store count.
+       ld hl,(cptr)        ; card pointer.
+       ld a,(hl)           ; card number.
+       cp 128              ; has it been flipped?
+       call nc,swcard      ; yes, switch card for new one.
+       ld hl,(cptr)        ; card pointer.
+       inc hl              ; move along.
+       ld (cptr),hl        ; new value.
+       pop bc              ; restore count.
+       djnz repl0          ; rest of hand.
+       ret
+
+
+cptr2  defw 0
+
+swcard ld de,(cptr2)       ; new card.
+       and 127             ; unflip it.
+       ld b,a              ; store in b.
+       ld a,(de)           ; new card.
+       ld (hl),a           ; give this to player.
+       ld a,b              ; old card.
+       ld (de),a           ; back in pack.
+       inc de              ; point to next new one.
+       ld (cptr2),de       ; set pointer.
+       ld a,(hl)           ; new card.
+       call dcard          ; display it.
+       call sndn           ; sound effect.
+       ld b,15             ; delay.
+       call delay          ; wait.
+       ret
+
+
+; Shuffle cards.
+
+deal   ld b,100            ; cards to switch.
+deal0  call random         ; random number.
+       and 63              ; mask away useless bits.
+       cp 52               ; beyond max card?
+       jr nc,deal0         ; out of range.
+       ld e,a              ; displacement.
+       ld d,0              ; no high byte.
+       ld hl,cards         ; pack address.
+       add hl,de           ; point to card.
+       ld c,(hl)           ; card in c.
+       ld a,(cards)        ; first card.
+       ld (hl),a           ; move here.
+       ld a,c              ; card in accumulator.
+       ld (cards),a        ; first card.
+       djnz deal0          ; repeat.
+       ret
+
+
+
+
+dhand  ld b,5              ; cards to display.
+       ld hl,cards         ; cards.
+       ld (cptr),hl        ; set pointer.
+dhand0 push bc             ; store count.
+       call dcard          ; display card.
+       ld hl,(cptr)        ; cards pointer.
+       inc hl              ; next card.
+       ld (cptr),hl        ; set pointer.
+       call sndn           ; sound effect.
+       ld b,15             ; delay.
+       call delay          ; wait.
+       pop bc              ; restore count.
+       djnz dhand0         ; rest of hand.
+       ret
+
+
+; Pseudo-random number generator.
+; Steps a pointer through the ROM (held in seed), returning the contents
+; of the byte at that location.
+
+random ld hl,(seed)        ; pointer to ROM.
+       ld a,(seed2)        ; previous seed.
+       add a,(hl)          ; combine with number from location.
+       ld (seed2),a        ; second seed.
+       res 5,h             ; stay within first 8K of ROM.
+       xor l               ; more randomness.
+       inc hl              ; increment pointer.
+       ld (seed),hl        ; new position.
+       ret
+
+seed   defw 0              ; random number seed.
+seed2  defb 0              ; second seed.
+
+delay  halt                ; pause.
+       djnz delay          ; repeat.
+       ret
+
+dcard  call cpos           ; card position.
+       ld hl,(cptr)        ; card pointer.
+       ld a,(hl)           ; card number.
+       cp 128              ; is it flipped?
+       jr nc,dcardb        ; yes, show card back instead.
+       and 32              ; red/black type.
+       rrca                ; divide by 16
+       rrca                ; so it's 0 or zero.
+       rrca
+       rrca
+       add a,56            ; black is attribute 56, red is 58.
+       ld (23695),a        ; set ink colour.
+       ld c,a              ; attribute.
+       defb 17,4,3         ; height and width.
+       call fbox           ; fill block.
+
+       call suitad         ; suit details.
+
+       ld a,22             ; AT code.
+       rst 16              ; display it.
+       ld a,(dispx)        ; x coord.
+       rst 16              ; display it.
+       ld a,(dispy)        ; y coord.
+       rst 16              ; display it.
+       call numtyp         ; display number on card.
+       ld a,32             ; space char.
+       rst 16              ; display it.
+       ld a,22             ; AT code.
+       rst 16              ; display it.
+       ld a,(dispx)        ; x coord.
+       add a,3             ; down 3 chars.
+       rst 16              ; display it.
+       ld a,(dispy)        ; y coord.
+       rst 16              ; display it.
+       ld a,32             ; space char.
+       rst 16              ; display it.
+       ld a,32             ; space char.
+       rst 16              ; display it.
+       ld a,32             ; space char.
+       rst 16              ; display it.
+       ld a,(dispx)        ; x coord.
+       inc a               ; adjust position.
+       ld (dispx),a        ; set x coord.
+       defb 33,2,3         ; height and width.
+       ld (height),hl      ; set parameters.
+       call suitad         ; get image data.
+       call image
+       ret
+
+dcardb defb 33,4,3         ; dimensions.
+       ld (height),hl      ; set parameters.
+       ld de,back          ; card back.
+       call image          ; show back.
+       ret
+
+
+cpos   ld hl,(cptr)        ; card pointer.
+       ld de,cards         ; address of cards.
+       and a               ; clear carry flag.
+       sbc hl,de           ; subtract pointer to find number we're on.
+       ld a,l              ; card to display.
+       rlca                ; position by 2.
+       ld e,a              ; number in e.
+       ld d,0              ; no high byte.
+       ld hl,cardxy        ; suit image pointers.
+       add hl,de           ; point to address.
+       ld e,(hl)           ; low byte of address.
+       inc hl              ; point to high byte.
+       ld d,(hl)           ; high byte of address.
+       ld (dispx),de       ; set coords.
+       ret
+
+
+cardxy defb 17,10,17,14
+       defb 17,18,17,22
+       defb 17,26
+
+; Return suit image address.
+
+suitad ld hl,(cptr)        ; card pointer.
+       ld a,(hl)           ; card to display.
+       and 48              ; only want suit details.
+       rrca                ; divide by 8.
+       rrca
+       rrca
+       ld e,a              ; displacement in e.
+       ld d,0              ; no high byte.
+       ld hl,sgptr         ; suit image pointers.
+       add hl,de           ; point to address.
+       ld e,(hl)           ; low byte of address.
+       inc hl              ; point to high byte.
+       ld d,(hl)           ; high byte of address.
+       ret
+numtyp ld hl,(cptr)        ; card pointer.
+       ld a,(hl)           ; card to display.
+       and 15              ; only want numeric value.
+       rlca                ; multiply by 2.
+       ld e,a              ; displacement in e.
+       ld d,0              ; no high byte.
+       ld hl,schar         ; card characters.
+       add hl,de           ; point to address.
+       ld a,(hl)           ; first character.
+       rst 16              ; display it.
+       inc hl              ; point to next char byte.
+       ld a,(hl)           ; last char.
+       rst 16              ; display that.
+       ret
+
+
+
+sgptr  defw suitgf,suitgf+54
+       defw suitgf+108,suitgf+162
+schar  defb '2 3 4 5 6 7 8 9 10J Q K A '
+cptr   defw cards
+
+
+
+; Winplan text.
+
+winp   defb 22,3,19
+       defb 'STRAIGHT@FLUSH@@@e``'
+       defb 22,4,19
+       defb 'd@OF@A@KIND@@@@@@c``'
+       defb 22,5,19
+       defb 'FULL@HOUSE@@@@@@@b``'
+       defb 22,6,19
+       defb 'FLUSH@@@@@@@@@@@@a``'
+       defb 22,7,19
+       defb 'STRAIGHT@@@@@@@@@@e`'
+       defb 22,8,19
+       defb 'c@OF@KIND@@@@@@@@@c`'
+       defb 22,9,19
+       defb 'b@PAIRS@@@@@@@@@@@b`'
+       defb ENDCHR
+
+
+mtxt   defb 22,13,28
+       defb 'PLAY'
+       defb 22,14,28
+       defb 'EXIT'
+       defb ENDCHR
+dtxt   defb 22,13,28
+       defb '@@@@'
+       defb 22,14,28
+       defb '@@@@'
+       defb ENDCHR
+
+
+
+; Fill box at (dispx, dispy) size (e, d) with colour c.
+
+fbox   call atadd          ; attribute address of coords.
+fbox3  ld b,d              ; width.
+fbox0  ld (hl),c           ; set colour.
+       inc hl              ; next cell.
+       djnz fbox0          ; repeat for line.
+       ld a,32             ; width of screen.
+       sub d               ; width of box.
+       jr z,fbox1          ; nothing to do.
+       ld b,a              ; counter.
+fbox2  inc hl              ; advance cell.
+       djnz fbox2          ; until start position reached.
+fbox1  dec e               ; one less line to do.
+       jp nz,fbox3         ; remaining lines.
+       ret z               ; done.
+
+
+
+dispx  defb 0              ; general coordinates.
+dispy  defb 0
+height defb 0              ; image height.
+width  defb 0              ; image width.
+
+
+image  ld hl,(dispx)       ; coords.
+       push hl             ; store coordinates.
+       and a               ; clear carry flag.
+       add hl,hl           ; multiple of 8.
+       add hl,hl
+       add hl,hl
+       ld (dispx),hl       ; set coord.
+       push de             ; store image address.
+       call scadd          ; calculate screen address.
+       pop de              ; restore image data.
+       ld a,(height)       ; height of sprite.
+       rlca                ; multiply by 8 for pixels.
+       rlca
+       rlca
+image1 ex af,af'           ; store loop counter.
+       ld a,(width)        ; width of image.
+       ld b,a              ; width counter.
+       push hl             ; store screen address.
+image0 ld a,(de)           ; image data.
+       ld (hl),a           ; transfer to screen.
+       inc l               ; next screen position.
+       inc de              ; more data.
+       djnz image0         ; rest of line.
+       pop hl              ; restore screen address.
+       ld a,(dispx)        ; vertical coordinate.
+       inc a               ; next line down.
+       ld (dispx),a        ; store new position.
+       and 63              ; are we moving to next third of screen?
+       jr z,image2         ; yes so find next segment.
+       and 7               ; moving into character cell below?
+       jr z,image3         ; yes, find next row.
+       inc h               ; next row of this character cell.
+image4 ex af,af'           ; restore loop counter.
+       dec a               ; decrement it.
+       jp nz,image1        ; not reached bottom of sprite yet to repeat.
+attwr  pop hl              ; restore coordinates.
+       ld (dispx),hl       ; set coords.
+       call atadd          ; attribute cell address.
+       ld a,(height)       ; sprite height.
+       ld b,a              ; height of image.
+attwr5 push bc             ; store counter.
+       ld a,(width)        ; width of image.
+       ld b,a              ; width counter.
+attwr6 ld a,(de)           ; source attribute.
+       ld (hl),a           ; write to screen.
+       inc de              ; next source.
+       inc l               ; next attribute cell.
+       djnz attwr6
+       ld a,(width)        ; width.
+       ld b,a              ; store in b.
+       ld a,32             ; width of screen.
+       sub b               ; distance to next line.
+       ld c,a              ; amount in bc.
+       ld b,0              ; no high byte.
+       add hl,bc           ; set address.
+       pop bc              ; retrieve counter from stack.
+       djnz attwr5
+       ret                 ; job done.
+image2 ld bc,32            ; next segment is 32 bytes on.
+       add hl,bc           ; add to screen address.
+       jp image4           ; repeat.
+image3 ld bc,63776         ; minus 1760.
+       add hl,bc           ; subtract 1760 from physical screen address.
+       jp image4           ; rejoin loop.
+
+
+; Display an ENDCHR-terminated string at hl.
+
+dfont  ld a,(hl)           ; get char from hl.
+       ld b,a              ; store in b for now.
+       inc hl              ; point to next char.
+       cp ENDCHR           ; is it a null terminator?
+       ret z               ; yes, job done.
+       call dfontc         ; display font character.
+       jr dfont            ; repeat.
+
+
+; 64-column display routine.
+
+
+; 32-column character display.
+
+dfontc cp AT               ; is it the AT code?
+       jp z,dchar1         ; yes, set x and y coordinates.
+p64    ld a,b              ; character to display.
+       push hl             ; store pointer to string.
+       call chr64          ; show character.
+       ld hl,nybble        ; half of character.
+       inc (hl)            ; toggle it.
+       ld a,(hl)           ; see what's there.
+       pop hl              ; restore string pointer.
+       rra                 ; are we into second half of byte?
+       ret c               ; yes, don't move print position yet.
+       ld a,(dispy)        ; print position.
+       inc a               ; move to next character position.
+       ld (dispy),a        ; set position.
+       ret
+
+; 64-column character printing routine.
+
+chr64  ld hl,font2-512     ; font address.
+       rlca                ; multiple of 8.
+       rlca
+       rlca
+       ld d,a              ; store in d for now.
+       and 248             ; mask away high byte bits.
+       ld e,a              ; displacement in e.
+       ld a,d              ; restore shift.
+       and 3               ; remove unwanted bits.
+       ld d,a              ; set high byte.
+       add hl,de           ; point to character address.
+       ld b,240            ; default = left half of character.
+       call chadd          ; screen address in de.
+       ld a,(nybble)       ; y displacement.
+       rra                 ; is it at odd character position?
+       jr nc,chr64a        ; no, we want left half of character.
+       ld b,15             ; want right half of character.
+chr64a ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       inc hl              ; next byte of font.
+       inc d               ; next byte of screen.
+       ld a,(hl)           ; font data.
+       and b               ; mask away nybble we don't want.
+       ld c,a              ; store in c for now.
+       ld a,(de)           ; screen data.
+       or b                ; set all pixels we don't need.
+       xor b               ; now mask them away.
+       or c                ; insert character bits.
+       ld (de),a           ; new screen byte.
+       ret
+
+
+; AT control bytes.
+
+dchar1 ld e,(hl)           ; get first control code.
+       inc hl              ; point to next one.
+       ld d,(hl)           ; get that code too.
+       inc hl              ; point to next valid character.
+       ld (dispx),de       ; set coordinates.
+       xor a               ; left half of character position.
+       ld (nybble),a       ; set up display nybble.
+       ret                 ; back to main loop.
+nybble defb 0
+
+; 4 x 8 character set.
+
+font2  defb 0,0,0,0,0,0,0,0
+       defb 0,238,170,170,238,170,170,0,0,238,170,204,170,170,238,0
+       defb 0,238,136,136,136,136,238,0,0,136,204,170,170,170,238,0
+       defb 0,238,136,204,136,136,238,0,0,238,136,204,136,136,136,0
+       defb 0,238,136,170,170,170,238,0,0,170,170,238,170,170,170,0
+       defb 0,238,68,68,68,68,238,0,0,34,34,34,34,34,238,0
+       defb 0,170,170,204,170,170,170,0,0,136,136,136,136,136,238,0
+       defb 0,170,238,170,170,170,170,0,0,204,170,170,170,170,170,0
+       defb 0,238,170,170,170,170,238,0,0,238,170,170,238,136,136,0
+       defb 0,238,170,170,170,170,255,0,0,238,170,170,204,170,170,0
+       defb 0,238,136,238,34,34,238,0,0,238,68,68,68,68,68,0
+       defb 0,170,170,170,170,170,238,0,0,170,170,170,170,68,68,0
+       defb 0,170,170,170,170,238,170,0,0,170,170,68,68,170,170,0
+       defb 0,170,170,170,238,34,238,0,0,238,34,68,68,136,238,0
+       defb 68,68,0,0,0,0,0,0,0,0,68,0,0,68,0,0
+       defb 0,0,0,0,0,0,68,0,0,170,34,68,68,136,170,0
+       defb 0,255,153,187,187,153,255,0,0,238,170,170,170,170,238,0
+       defb 0,68,204,68,68,68,238,0,0,204,34,34,68,136,238,0
+       defb 0,204,34,68,34,34,204,0,0,136,170,170,238,34,34,0
+       defb 0,238,136,204,34,34,204,0,0,102,136,204,170,170,68,0
+       defb 0,238,34,34,68,68,68,0,0,238,170,68,170,170,238,0
+       defb 0,68,170,170,102,34,204,0
+       defb 0,34,34,68,68,136,136,0
+
+
+
+
+; Return character cell address of block at (dispx, dispy).
+
+chadd  ld a,(dispx)        ; vertical position.
+       ld e,a              ; store in e.
+       and 24              ; which segment, 1 to 3?
+       add a,64            ; 64*256 = 16384, Spectrum's screen memory.
+       ld d,a              ; this is our high byte.
+       ld a,e              ; what was that vertical position again?
+       and 7               ; which row within segment?
+       rrca                ; multiply row by 32.
+       rrca
+       rrca
+       ld e,a              ; low byte.
+       ld a,(dispy)        ; add on y coordinate.
+       add a,e             ; mix with low byte.
+       ld e,a              ; address of screen position in de.
+       ret
+
+; Find address of character attribute at (dispx, dispy).
+; Adapted to return result in hl pair.
+
+atadd  ld a,(dispx)        ; vertical position.
+       rrca                ; divide by 8.
+       rrca
+       rrca
+       ld l,a              ; store in e for now.
+       and 3               ; mask bits to find screen segment.
+       add a,88            ; attributes start at 88*256=22528.
+       ld h,a              ; that gives us our high byte.
+       ld a,l              ; vertical divided by 8/multiplied by 32.
+       and 224             ; mask bits to find a multiple of 32.
+       ld l,a              ; put that in low byte.
+       ld a,(dispy)        ; get horizontal position.
+       add a,l             ; add to low byte.
+       ld l,a              ; final low byte.
+       ret
+       
+
+; Calculating a screen address from a pixel coordinate can be tricky!
+; The Spectrum screen display is organized into 3 segments of 2048 bytes,
+; all containing 8 rows of 32 character squares, each with 8 lines.
+; Hence 8 * 32 * 8 * 3 = 6144 bytes.
+; Low resolution colour filter = 32 * 8 character squares = 768 bytes.
+; Total = 6144 + 768 = 6912 bytes, 16384 to 23295 inclusive.
+
+scadd  ld a,(dispx)        ; Returns screen address of coordinates
+       ld l,a              ; (dispx, dispy) in hl.
+       and 7               ; Line 0-7 within character square.
+       add a,64            ; 64 * 256 = 16384 (Start of screen display)
+       ld h,a              ; Line * 256.
+       ld a,l
+       rrca
+       rrca
+       rrca
+       and 24              ; Segment 0-2 multiplied by 8
+       add a,h             ; Add to h (so multiply by 8 * 256 = 2048)
+       ld h,a
+       ld a,l              ; 8 character squares per segment.
+       rlca                ; Divide x by 8 and multiply by 32,
+       rlca                ; net calculation: multiply by 4.
+       and 224             ; Mask off bits we don't want.
+       ld l,a              ; Vertical coordinate calculation done.
+       ld a,(dispy)        ; y coordinate.
+       rrca                ; Only need to divide by 8.
+       rrca
+       rrca
+       and 31              ; Squares 0 - 31 across screen.
+       add a,l             ; Add to total so far.
+       ld l,a              ; hl = address of screen.
+       ret
+
+
+; Sound of card being turned over.
+
+sndn   ld b,5
+sndn0  xor a
+       out (254),a
+       ld a,248
+       out (254),a
+       djnz sndn0
+       ret
+
+
+
+
+cards  defb 0,1,2,3,4,5,6,7,8,9,10,11,12
+       defb 16,17,18,19,20,21,22,23,24,25,26,27,28
+       defb 32,33,34,35,36,37,38,39,40,41,42,43,44
+       defb 48,49,50,51,52,53,54,49,50,51,52,53,54
+
+
+; Arrow image.
+
+arrow  defb 0,0,0,0,16,0,0,56,0,0,124,0,0,254,0,1
+       defb 255,0,3,255,128,7,255,192,14,14,14
+space  defb 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+       defb 0,0,0,0,0,0,0,0,14,14,14
+
+; Back of card.
+
+back   defb 34,34,34,85,85,85,136,136,136,85,85,85,34,34,34,85
+       defb 85,85,136,136,136,85,85,85
+       defb 34,34,34,85,85,85,136,136,136,85,85,85,34,34,34,85
+       defb 85,85,136,136,136,85,85,85
+       defb 34,34,34,85,85,85,136,136,136,85,85,85,34,34,34,85
+       defb 85,85,136,136,136,85,85,85
+       defb 34,34,34,85,85,85,136,136,136,85,85,85,34,34,34,85
+       defb 85,85,136,136,136,85,85,85
+       defb 58,58,58,58,58,58,58,58,58,58,58,58
+
+
+; Suits images.
+
+suitgf defb 0,56,0,0,124,0,0,254,0,0,254,0,0,254,0,0
+       defb 124,0,3,187,128,7,255,192,15,255,224,15,255,224,15,255
+       defb 224,7,255,192,3,187,128,0,56,0,0,124,0,0,124,0
+       defb 56,56,56,56,56,56
+
+       defb 0,16,0,0,16,0,0,56,0,0,124,0,0,254,0,1
+       defb 255,0,3,255,128,7,255,192,15,255,224,15,255,224,15,255
+       defb 224,7,255,192,3,187,128,0,56,0,0,124,0,0,254,0
+       defb 56,56,56,56,56,56
+
+       defb 3,131,128,7,199,192,15,239,224,15,255,224,15,255,224,15
+       defb 255,224,15,255,224,7,255,192,7,255,192,3,255,128,1,255
+       defb 0,1,255,0,0,254,0,0,124,0,0,56,0,0,16,0
+       defb 58,58,58,58,58,58
+
+       defb 0,16,0,0,56,0,0,56,0,0,124,0,0,124,0,0
+       defb 254,0,1,255,0,3,255,128,3,255,128,1,255,0,0,254
+       defb 0,0,124,0,0,124,0,0,56,0,0,56,0,0,16,0
+       defb 58,58,58,58,58,58
+
+
+; Alien dealer image.
+
+aldgfx defb 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+       defb 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+       defb 0,0,0,0,0,0,0,0,0,0,7,255,240,0,0,0
+       defb 0,0,63,255,254,0,0,0,0,0,255,255,255,128,0,0
+       defb 0,3,255,255,255,224,0,0,0,15,255,255,255,240,0,0
+       defb 0,31,255,255,255,252,0,0,0,63,255,255,255,254,0,0
+       defb 0,127,255,255,255,255,0,0,0,255,255,255,255,255,128,0
+       defb 1,255,255,255,255,255,192,0,3,255,255,255,255,255,224,0
+       defb 7,255,255,255,255,255,240,0,15,255,255,255,255,255,248,0
+       defb 15,255,255,255,255,255,248,0,31,255,255,255,255,255,252,0
+       defb 31,255,255,255,255,255,252,0,63,255,255,255,255,255,254,0
+       defb 63,255,255,255,255,255,254,0,63,255,255,255,255,255,254,0
+       defb 127,255,255,255,255,255,255,0,127,255,255,255,255,255,255,0
+       defb 127,255,255,255,255,255,255,0,127,255,255,255,255,255,255,0
+       defb 255,255,255,255,255,255,255,128,255,255,255,255,255,255,255,128
+       defb 255,255,255,255,255,255,255,128,255,255,255,255,255,255,255,128
+       defb 255,255,255,255,255,255,255,128,255,255,255,255,255,255,255,128
+       defb 255,255,255,255,255,255,255,128,255,255,255,255,255,255,255,128
+       defb 255,255,255,255,255,255,255,128,255,255,255,255,255,255,255,128
+       defb 255,255,255,255,255,255,255,0,127,255,255,255,255,255,255,0
+       defb 127,255,255,255,255,255,255,0,127,255,255,255,255,255,255,0
+       defb 63,255,255,255,255,255,254,0,63,255,255,255,255,255,254,0
+       defb 63,255,255,255,255,255,254,0,31,255,255,255,255,255,252,0
+       defb 31,255,255,255,255,255,252,0,15,135,255,255,255,195,248,0
+       defb 15,255,0,255,1,254,248,0,7,255,192,255,7,255,240,0
+       defb 7,255,224,255,15,255,240,0,7,255,240,255,31,255,240,0
+       defb 7,255,248,255,63,255,240,0,15,255,252,255,127,255,248,0
+       defb 15,255,254,255,255,255,248,0,15,255,255,254,255,254,248,0
+       defb 15,127,255,131,255,254,252,0,31,63,255,131,255,252,252,0
+       defb 31,31,255,199,255,248,252,0,31,7,255,199,255,224,252,0
+       defb 31,1,255,199,255,128,248,0,15,0,127,199,254,0,248,0
+       defb 15,0,0,0,0,0,248,0,15,0,0,0,0,0,240,0
+       defb 7,255,255,255,255,255,240,0,3,255,255,255,255,255,224,0
+       defb 3,255,255,255,255,255,224,0,1,255,255,255,255,255,192,0
+       defb 0,255,255,255,255,255,128,0,0,127,255,153,255,255,0,0
+       defb 0,63,255,255,255,254,0,0,0,31,255,255,255,252,0,0
+       defb 0,31,255,255,255,248,0,0,0,15,255,255,255,248,0,0
+       defb 0,15,255,255,255,248,0,0,0,7,255,255,255,240,0,0
+       defb 0,7,255,255,255,240,0,0,0,3,255,136,255,224,0,0
+       defb 0,3,255,99,127,192,0,0,0,1,255,255,255,192,0,0
+       defb 0,0,0,255,0,128,0,0,0,0,128,255,0,0,0,0
+       defb 0,0,192,255,1,0,0,0,0,0,224,255,3,0,0,0
+       defb 0,0,240,255,7,0,0,0,0,0,248,255,15,0,0,0
+       defb 0,0,242,255,39,0,0,0,0,0,241,127,199,0,0,0
+       defb 0,0,224,127,3,0,0,0,0,1,246,0,55,192,0,0
+       defb 0,1,255,128,255,224,0,0,0,3,223,221,253,240,0,0
+       defb 0,7,143,255,248,248,0,0,0,7,15,255,248,252,0,0
+       defb 0,15,143,255,248,252,0,0,0,31,143,221,248,254,0,0
+       defb 0,63,135,128,240,255,0,0,0,127,192,0,1,255,128,0
+       defb 0,127,224,0,3,255,128,0,0,255,224,0,3,255,192,0
+       defb 0,255,240,0,7,255,192,0,1,255,248,0,15,255,224,0
+       defb 3,255,248,0,15,255,224,0,3,255,252,0,31,255,224,0
+       defb 3,255,254,0,63,255,240,0,7,255,254,0,63,255,240,0
+       defb 7,255,255,0,127,255,248,0,15,255,255,128,255,255,248,0
+       defb 15,255,255,255,255,255,248,0,15,255,255,255,255,255,248,0
+       defb 15,255,255,255,255,255,252,0,31,255,255,255,255,255,252,0
+       defb 84,84,84,84,84,84,84,84,84,84,76,76,76,84,84,84
+       defb 84,100,100,116,116,100,84,84,84,84,84,84,84,84,84,84
+       defb 84,84,84,84,84,84,84,84,84,76,76,76,76,76,84,84
+       defb 84,101,97,108,97,101,84,84,84,97,101,97,101,97,84,84
+       defb 84,84,68,68,68,84,84,84,84,84,68,68,68,84,84,84
+       defb 84,84,98,68,98,84,84,84,80,80,120,120,120,80,80,84
+       defb 16,16,120,120,120,72,16,16,16,120,120,120,120,120,16,16
+
+termin equ $
+
+
