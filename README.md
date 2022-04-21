@@ -1,5 +1,5 @@
 # tec-Blizzards-Rift
-simple tec1 version of Blizzard's Rift
+make a simple tec1 version of Blizzard's Rift
 
 
 ### Ref
