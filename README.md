@@ -45,9 +45,9 @@ Latrine's black box contains the coordinates of a time portal which he discovere
 
 
 ### Ref
+
 - https://worldofspectrum.net/item/0017562/
 - https://spectrumcomputing.co.uk/entry/17562/ZX-Spectrum/Blizzards_Rift
-
 - https://spectrumcomputing.co.uk/entry/17562/ZX-Spectrum/Blizzards_Rift
 - Blizzard's Rift Walkthrough, ZX Spectrum  https://www.youtube.com/watch?v=bdFbLGRghjU
 - https://en.wikipedia.org/wiki/List_of_commercial_video_games_with_available_source_code
