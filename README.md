@@ -43,6 +43,15 @@ Latrine's black box contains the coordinates of a time portal which he discovere
 4. Use the modules to destroy the saucers.
 5. Find the saucer control base hulk and destroy it. and WIN!
 
+### from wiki
+The player controls a surface rover vehicle to enter several "rifts" on an alien planet which are effectively fractal mazes. A lost civilisation known as the Ancients[4] has left strange machinery, so-called "hulks",[5] within these rifts which are guarded by armed flying saucers of different design and color. Depending on their respective color, shields and gunshots of both the rover and the saucers are of varying effectiveness against each other; part of the game is figuring out which shield and weapon modules work best where.
+
+By means of a drone robot, the rover can retrieve modules with various functions (which are not immediately obvious) from nearby hulks. It can only be deployed when all attacking Guardian Saucers have been destroyed.[4] The modules can then be installed in the rover, analyzed aboard the player's space ship, or sold; the rover can carry up to six different modules at a time which can be activated and de-activated as the player sees fit.[4] A large variety of modules is available: Different weapon and shield modules with varying power levels and color codes, modules that increase the rover's power output, a mapper (activating an extra screen on the rover), and even one module that turns the retrieval probe into a bomb, destroying any hulks the probe is sent to investigate instead of retrieving modules.
+
+Conversely, different types of hulks exist including one that simply "swallows" the probe without yielding a module, requiring the player to purchase a new probe (and possibly sell useful modules to raise the required funds).
+
+The goal of the game is to find and destroy the saucer control base hulk which is located in the 20th rift.[3] To this end, the player must explore the rifts, find hulks, retrieve and analyze modules and understand the color-coding of weapons and shields to overcome the increasingly aggressive and dangerous saucers. The game can be solved in several ways; the quickest is to acquire the bomb module and send the probe into the saucer base with the bomb module activated.
+
 
 ### Ref
 
