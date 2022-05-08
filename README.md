@@ -1,5 +1,5 @@
 # tec-Blizzards-Rift
-make a simple tec1 version of Blizzard's Rift to play on 8x8 and LCD8x2
+make a simple tec1 version of Blizzard's Rift to play on 8x8 and LCD1602
 
 
 ### Ref
